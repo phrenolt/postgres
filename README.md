@@ -33,6 +33,16 @@ asks for the database password (the random Podman secret):
 podman exec postgres-alpine cat /run/secrets/pg_super_pass
 ```
 
+You don't need the DB running to launch pgAdmin — `servers.json` is just a
+bookmark, imported once; an offline server only errors *in the UI* when you
+expand it, never at startup. For a bare client with nothing pre-loaded:
+
+```bash
+PGADMIN_PASSWORD='...' ./run_pgadmin.sh --no-servers   # or PGADMIN_NO_SERVERS=1
+```
+
+(A missing `servers.json` also just falls back to a bare client — never fatal.)
+
 To add a launcher to your desktop menu (optional):
 
 ```bash
