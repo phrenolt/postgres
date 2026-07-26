@@ -17,15 +17,42 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 LAUNCHER="$HERE/pgadmin-launch.sh"
 APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 DESKTOP_FILE="$APPS_DIR/pgadmin4.desktop"
-# Icon: an explicit ICON=/path/to/icon wins; otherwise the first project-local
-# logo.* (png/svg/webp/jpg); otherwise a standard freedesktop icon name that
-# exists in essentially every theme, so the entry never shows a broken image.
+# Keep a square icon.png in sync with the source logo. Desktop icons render in a
+# SQUARE box, so a non-square logo (e.g. 1080x607) gets squished. When ImageMagick
+# is available we fit the newest logo.* onto a 512x512 transparent canvas —
+# preserving aspect, no distortion — and (re)generate icon.png whenever the logo
+# is newer or icon.png is missing. Skipped silently if no logo or no ImageMagick.
+regen_icon() {
+  local magick logo="" ext
+  magick="$(command -v magick || command -v convert || true)"
+  [ -n "$magick" ] || return 0
+  for ext in png svg webp jpg jpeg; do
+    [ -f "$HERE/logo.$ext" ] && { logo="$HERE/logo.$ext"; break; }
+  done
+  [ -n "$logo" ] || return 0
+  if [ ! -f "$HERE/icon.png" ] || [ "$logo" -nt "$HERE/icon.png" ]; then
+    "$magick" "$logo" -resize 512x512 -background none -gravity center \
+      -extent 512x512 "$HERE/icon.png" 2>/dev/null \
+      && echo "regenerated square icon.png from $(basename "$logo")" || true
+  fi
+}
+regen_icon
+
+# Icon resolution, in order of preference:
+#   1. an explicit ICON=/path/to/icon
+#   2. a purpose-made square icon.* (icons render in a SQUARE box, so a non-square
+#      logo gets squished — icon.png is a padded square derived from the logo)
+#   3. the raw logo.* as a fallback
+#   4. a standard freedesktop icon name that exists in essentially every theme,
+#      so the entry never shows a broken image.
 # Note: webp/svg icons need the matching gdk-pixbuf loader installed; if the menu
-# shows a blank icon, convert logo to PNG or pass ICON=applications-databases.
+# shows a blank icon, use a PNG or pass ICON=applications-databases.
 if [ -z "${ICON:-}" ]; then
   ICON="applications-databases"
-  for ext in png svg webp jpg jpeg; do
-    if [ -f "$HERE/logo.$ext" ]; then ICON="$HERE/logo.$ext"; break; fi
+  for base in icon logo; do
+    for ext in png svg webp jpg jpeg; do
+      if [ -f "$HERE/$base.$ext" ]; then ICON="$HERE/$base.$ext"; break 2; fi
+    done
   done
 fi
 

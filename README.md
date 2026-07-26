@@ -17,7 +17,8 @@ Hardened, rootless PostgreSQL on Podman, plus a pgAdmin 4 web client.
   integration. The installer drops a "pgAdmin 4" entry into your application menu
   that runs the launcher: it starts the container if needed, waits for the port,
   and opens the browser. First launch prompts once for the pgAdmin login password
-  (GUI dialog); later launches just open it.
+  (GUI dialog); later launches just open it. Drop a `logo.*` in the project and the
+  installer derives a square `icon.png` from it (needs ImageMagick) for the menu icon.
 
 ## Usage
 
