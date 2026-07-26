@@ -13,6 +13,11 @@ Hardened, rootless PostgreSQL on Podman, plus a pgAdmin 4 web client.
 - **`run_pgadmin.sh`** + **`servers.json`** — pgAdmin 4 (pinned `9.16`, supports
   PostgreSQL 18) running in the host network namespace with its web UI bound to
   `127.0.0.1:5050`. `servers.json` pre-loads the local server; add more from the UI.
+- **`pgadmin-launch.sh`** + **`install-desktop-entry.sh`** — optional desktop
+  integration. The installer drops a "pgAdmin 4" entry into your application menu
+  that runs the launcher: it starts the container if needed, waits for the port,
+  and opens the browser. First launch prompts once for the pgAdmin login password
+  (GUI dialog); later launches just open it.
 
 ## Usage
 
@@ -26,6 +31,13 @@ asks for the database password (the random Podman secret):
 
 ```bash
 podman exec postgres-alpine cat /run/secrets/pg_super_pass
+```
+
+To add a launcher to your desktop menu (optional):
+
+```bash
+./install-desktop-entry.sh            # install (creates ~/.local/share/applications/pgadmin4.desktop)
+./install-desktop-entry.sh --remove   # uninstall
 ```
 
 Versions are pinned in lockstep — bump the Postgres tag in `run_postgresql.sh` and

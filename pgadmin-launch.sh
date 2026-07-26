@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# pgadmin-launch.sh — what the desktop entry actually runs.
+#
+# Makes pgAdmin reachable, then opens it in the browser. Safe to run repeatedly:
+#   - container already provisioned -> just `podman start` it (no password needed;
+#     pgAdmin's login lives in the persisted config volume after first run).
+#   - not provisioned yet           -> first-time setup via run_pgadmin.sh, which
+#     needs the pgAdmin login password once. Sourced from, in order:
+#       PGADMIN_PASSWORD env  ->  a GUI dialog (zenity/kdialog)  ->  terminal prompt.
+#
+# After that first run the volume holds the login, so every later launch is a
+# password-free `podman start`.
+set -euo pipefail
+
+CONTAINER_NAME="pgadmin"
+# Keep in sync with run_pgadmin.sh (BIND_ADDR / LISTEN_PORT).
+BIND_ADDR="127.0.0.1"
+LISTEN_PORT="5050"
+URL="http://${BIND_ADDR}:${LISTEN_PORT}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+command -v podman >/dev/null || { echo "podman not found on PATH" >&2; exit 1; }
+
+# Ask for the pgAdmin login password (first run only). GUI first (the desktop
+# entry has no terminal), then an interactive terminal, else a clear error.
+prompt_password() {
+  local pw=""
+  if command -v zenity >/dev/null; then
+    pw=$(zenity --password --title="pgAdmin — set login password (first run)" 2>/dev/null) || return 1
+  elif command -v kdialog >/dev/null; then
+    pw=$(kdialog --password "Set the pgAdmin login password (first run):") || return 1
+  elif [ -t 0 ]; then
+    read -rsp "Set the pgAdmin login password (first run): " pw && echo >&2
+  else
+    echo "First run needs a login password and no zenity/kdialog/terminal is available." >&2
+    echo "Run this once from a terminal:  PGADMIN_PASSWORD=... ${HERE}/run_pgadmin.sh" >&2
+    return 1
+  fi
+  [ -n "$pw" ] || { echo "empty password" >&2; return 1; }
+  printf '%s' "$pw"
+}
+
+if podman container exists "$CONTAINER_NAME"; then
+  # Already set up — just ensure it's running. No secrets required.
+  podman start "$CONTAINER_NAME" >/dev/null 2>&1 || true
+else
+  if [ -z "${PGADMIN_PASSWORD:-}" ]; then
+    PGADMIN_PASSWORD="$(prompt_password)" || exit 1
+    export PGADMIN_PASSWORD
+  fi
+  "$HERE/run_pgadmin.sh"
+fi
+
+# Wait (up to ~30s) for the web UI to accept connections before opening it, so
+# the browser doesn't land on a connection-refused page during cold start.
+for _ in $(seq 1 30); do
+  if (exec 3<>"/dev/tcp/${BIND_ADDR}/${LISTEN_PORT}") 2>/dev/null; then
+    exec 3>&- 3<&-
+    break
+  fi
+  sleep 1
+done
+
+command -v xdg-open >/dev/null && xdg-open "$URL" >/dev/null 2>&1 || echo "Open $URL"
