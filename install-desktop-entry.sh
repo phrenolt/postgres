@@ -17,15 +17,16 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 LAUNCHER="$HERE/pgadmin-launch.sh"
 APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 DESKTOP_FILE="$APPS_DIR/pgadmin4.desktop"
-# Icon: an explicit ICON=/path/to/icon.png wins; otherwise a project-local
-# logo.png if present; otherwise a standard freedesktop icon name that exists in
-# essentially every theme, so the entry never shows a broken image.
-if [ -n "${ICON:-}" ]; then
-  ICON="$ICON"
-elif [ -f "$HERE/logo.png" ]; then
-  ICON="$HERE/logo.png"
-else
+# Icon: an explicit ICON=/path/to/icon wins; otherwise the first project-local
+# logo.* (png/svg/webp/jpg); otherwise a standard freedesktop icon name that
+# exists in essentially every theme, so the entry never shows a broken image.
+# Note: webp/svg icons need the matching gdk-pixbuf loader installed; if the menu
+# shows a blank icon, convert logo to PNG or pass ICON=applications-databases.
+if [ -z "${ICON:-}" ]; then
   ICON="applications-databases"
+  for ext in png svg webp jpg jpeg; do
+    if [ -f "$HERE/logo.$ext" ]; then ICON="$HERE/logo.$ext"; break; fi
+  done
 fi
 
 if [ "${1:-}" = "--remove" ]; then
