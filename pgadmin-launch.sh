@@ -13,7 +13,8 @@
 set -euo pipefail
 
 CONTAINER_NAME="pgadmin"
-# Keep in sync with run_pgadmin.sh (BIND_ADDR / LISTEN_PORT).
+# Keep in sync with run_pgadmin.sh (CONFIG_VOL / BIND_ADDR / LISTEN_PORT).
+CONFIG_VOL="pgadmin_config"
 BIND_ADDR="127.0.0.1"
 LISTEN_PORT="5050"
 URL="http://${BIND_ADDR}:${LISTEN_PORT}"
@@ -44,7 +45,11 @@ if podman container exists "$CONTAINER_NAME"; then
   # Already set up — just ensure it's running. No secrets required.
   podman start "$CONTAINER_NAME" >/dev/null 2>&1 || true
 else
-  if [ -z "${PGADMIN_PASSWORD:-}" ]; then
+  # Container is gone (reboot, cleanup, first ever run) — (re)create it. Only a
+  # TRUE first run (no config volume yet) needs a password; the login lives in
+  # that volume, so a recreate over an existing volume must NOT prompt. run_pgadmin.sh
+  # supplies a throwaway when the volume already exists.
+  if ! podman volume exists "$CONFIG_VOL" && [ -z "${PGADMIN_PASSWORD:-}" ]; then
     PGADMIN_PASSWORD="$(prompt_password)" || exit 1
     export PGADMIN_PASSWORD
   fi

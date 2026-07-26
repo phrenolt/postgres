@@ -25,13 +25,11 @@ SERVERS_JSON="$HERE/servers.json"
 NO_SERVERS="${PGADMIN_NO_SERVERS:-0}"
 [ "${1:-}" = "--no-servers" ] && NO_SERVERS=1
 
-# pgAdmin's OWN login (the app's auth, NOT any database password). Supply the
-# password via env so it never lives in this file or in `podman inspect` history
-# baked into an image. The email is just the login username, but pgAdmin runs it
-# through a real email-address validator at startup and REFUSES to boot on a bad
-# one (e.g. 'admin@local' fails: the domain needs a dot). Default to a valid form.
+# pgAdmin's OWN login (the app's auth, NOT any database password). The email is
+# just the login username, but pgAdmin runs it through a real email-address
+# validator at startup and REFUSES to boot on a bad one (e.g. 'admin@local'
+# fails: the domain needs a dot). Default to a valid form.
 PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@example.com}"
-: "${PGADMIN_PASSWORD:?set PGADMIN_PASSWORD in the environment before running (pgAdmin login password)}"
 
 # --- Preflight ----------------------------------------------------------------
 command -v podman >/dev/null || { echo "podman not found on PATH" >&2; exit 1; }
@@ -50,7 +48,22 @@ fi
 # Persist pgAdmin's own config/state (users, saved servers, session, storage).
 # :U recursively chowns the volume to pgAdmin's mapped uid so it's writable under
 # rootless podman (the entrypoint runs non-root and can't chown it itself).
-podman volume exists "$CONFIG_VOL" || podman volume create "$CONFIG_VOL" >/dev/null
+#
+# The login password is ONLY consumed on the first init of this volume; after
+# that pgAdmin uses the stored account and IGNORES PGADMIN_DEFAULT_PASSWORD. So:
+#   - first run (no volume)  -> DEMAND a real password; it becomes your login.
+#   - later runs (volume set) -> the image still requires the var to be non-empty,
+#                                so pass a throwaway that pgAdmin discards.
+# This is why re-running never changes your password, and why you should never be
+# re-prompted for one.
+if podman volume exists "$CONFIG_VOL"; then
+  FIRST_RUN=0
+  PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ignored-after-first-init}"
+else
+  FIRST_RUN=1
+  : "${PGADMIN_PASSWORD:?first run: set PGADMIN_PASSWORD — this becomes your pgAdmin login password}"
+  podman volume create "$CONFIG_VOL" >/dev/null
+fi
 
 # --- Run ----------------------------------------------------------------------
 # The servers.json pre-provision is only added when PRELOAD=1 (see preflight),
@@ -85,7 +98,11 @@ podman run -d \
 
 echo "pgAdmin is starting."
 echo "  URL:    http://${BIND_ADDR}:${LISTEN_PORT}"
-echo "  Login:  ${PGADMIN_EMAIL}  (password: the PGADMIN_PASSWORD you set)"
+if [ "$FIRST_RUN" = 1 ]; then
+  echo "  Login:  ${PGADMIN_EMAIL}  (password: the PGADMIN_PASSWORD you just set)"
+else
+  echo "  Login:  ${PGADMIN_EMAIL}  (password: the one from your first run — unchanged)"
+fi
 if [ "$PRELOAD" = 1 ]; then
   cat <<EOF
 
