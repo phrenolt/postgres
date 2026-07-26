@@ -53,12 +53,36 @@ fi
 
 # Wait (up to ~30s) for the web UI to accept connections before opening it, so
 # the browser doesn't land on a connection-refused page during cold start.
+up=0
 for _ in $(seq 1 30); do
   if (exec 3<>"/dev/tcp/${BIND_ADDR}/${LISTEN_PORT}") 2>/dev/null; then
     exec 3>&- 3<&-
+    up=1
     break
   fi
+  # If the container has already died (e.g. bad config), stop waiting early.
+  podman container exists "$CONTAINER_NAME" \
+    && [ "$(podman inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" != true ] \
+    && break
   sleep 1
 done
+
+if [ "$up" != 1 ]; then
+  # Don't open a dead browser tab — surface the failure where a GUI user can see
+  # it, with the log tail that explains why (this is how a crash-loop stops being
+  # an invisible "nothing happens").
+  logs="$(podman logs --tail 15 "$CONTAINER_NAME" 2>&1 || true)"
+  msg="pgAdmin failed to come up on ${URL}.
+
+Recent container log:
+${logs}"
+  if command -v zenity >/dev/null; then
+    zenity --error --title="pgAdmin" --width=600 --text="$msg" 2>/dev/null || true
+  elif command -v notify-send >/dev/null; then
+    notify-send "pgAdmin failed to start" "See: podman logs $CONTAINER_NAME" || true
+  fi
+  echo "$msg" >&2
+  exit 1
+fi
 
 command -v xdg-open >/dev/null && xdg-open "$URL" >/dev/null 2>&1 || echo "Open $URL"

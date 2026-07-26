@@ -27,8 +27,10 @@ NO_SERVERS="${PGADMIN_NO_SERVERS:-0}"
 
 # pgAdmin's OWN login (the app's auth, NOT any database password). Supply the
 # password via env so it never lives in this file or in `podman inspect` history
-# baked into an image. Email has a sane default you can override.
-PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@local}"
+# baked into an image. The email is just the login username, but pgAdmin runs it
+# through a real email-address validator at startup and REFUSES to boot on a bad
+# one (e.g. 'admin@local' fails: the domain needs a dot). Default to a valid form.
+PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@example.com}"
 : "${PGADMIN_PASSWORD:?set PGADMIN_PASSWORD in the environment before running (pgAdmin login password)}"
 
 # --- Preflight ----------------------------------------------------------------
