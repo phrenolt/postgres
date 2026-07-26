@@ -54,7 +54,7 @@ fi
 # Wait (up to ~30s) for the web UI to accept connections before opening it, so
 # the browser doesn't land on a connection-refused page during cold start.
 up=0
-for _ in $(seq 1 30); do
+for _ in $(seq 1 60); do
   if (exec 3<>"/dev/tcp/${BIND_ADDR}/${LISTEN_PORT}") 2>/dev/null; then
     exec 3>&- 3<&-
     up=1
@@ -85,4 +85,20 @@ ${logs}"
   exit 1
 fi
 
-command -v xdg-open >/dev/null && xdg-open "$URL" >/dev/null 2>&1 || echo "Open $URL"
+# Open the browser robustly. When launched from a bare .desktop under Wayland/
+# GNOME, xdg-open often silently no-ops (no inherited session bus / handler
+# quirks) — which is the classic "clicked it, nothing happened". Try the DE's own
+# opener first (gio, uses the session portal), then xdg-open, then at minimum
+# TELL the user the URL via a dialog/notification so it's never a silent no-op.
+open_url() {
+  local url="$1"
+  command -v gio      >/dev/null && gio open "$url"      >/dev/null 2>&1 && return 0
+  command -v xdg-open >/dev/null && xdg-open "$url"      >/dev/null 2>&1 && return 0
+  if command -v zenity >/dev/null; then
+    zenity --info --title="pgAdmin" --text="pgAdmin is running at:\n${url}" 2>/dev/null || true
+  elif command -v notify-send >/dev/null; then
+    notify-send "pgAdmin is running" "$url" || true
+  fi
+  echo "Open $url"
+}
+open_url "$URL"

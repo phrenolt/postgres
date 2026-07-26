@@ -13,6 +13,9 @@ Hardened, rootless PostgreSQL on Podman, plus a pgAdmin 4 web client.
 - **`run_pgadmin.sh`** + **`servers.json`** — pgAdmin 4 (pinned `9.16`, supports
   PostgreSQL 18) running in the host network namespace with its web UI bound to
   `127.0.0.1:5050`. `servers.json` pre-loads the local server; add more from the UI.
+- **`psql.sh`** — a psql shell on the database with zero host deps. Runs psql
+  *inside* the server container (over its trusted local socket), so no host psql
+  and no password. Passes args through: `./psql.sh -c 'select version();'`.
 - **`pgadmin-launch.sh`** + **`install-desktop-entry.sh`** — optional desktop
   integration. The installer drops a "pgAdmin 4" entry into your application menu
   that runs the launcher: it starts the container if needed, waits for the port,

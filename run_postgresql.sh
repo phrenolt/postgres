@@ -42,6 +42,13 @@ fi
 # NOTE: PG18's image moved PGDATA into a version-scoped subdir and ERRORS if the
 # volume is mounted at the legacy /var/lib/postgresql/data. Mount the PARENT
 # (/var/lib/postgresql) instead.
+# NOTE: POSTGRES_HOST_AUTH_METHOD=scram-sha-256 makes the entrypoint write a
+# `host all all all scram-sha-256` pg_hba rule on first init. It's required for
+# host tools (pgAdmin/psql) hitting the published loopback port: rootless
+# netavark SNATs that connection, so Postgres sees it arriving from the
+# container's own subnet IP (e.g. 10.89.x.x), NOT 127.0.0.1 — the default
+# 127.0.0.1/32-only rules never match it. Still password-gated (scram); the port
+# is loopback-only, so only host-local processes can reach it in the first place.
 podman run -d \
   --name "$CONTAINER_NAME" \
   --replace \
@@ -52,7 +59,7 @@ podman run -d \
   --tmpfs /tmp:rw,noexec,nosuid \
   --tmpfs /var/run/postgresql:rw,noexec,nosuid \
   --cap-drop=ALL \
-  --cap-add=CHOWN,SETGID,SETUID,DAC_OVERRIDE \
+  --cap-add=CHOWN,DAC_OVERRIDE,FOWNER,SETGID,SETUID \
   --security-opt=no-new-privileges \
   --cpus="1.5" \
   --memory="1g" \
@@ -60,13 +67,14 @@ podman run -d \
   -e POSTGRES_PASSWORD_FILE="/run/secrets/pg_super_pass" \
   -e POSTGRES_USER="db_admin" \
   -e POSTGRES_DB="app_database" \
+  -e POSTGRES_HOST_AUTH_METHOD="scram-sha-256" \
   -v "$PGDATA_VOL:/var/lib/postgresql:Z" \
   -v "$INIT_DIR:/docker-entrypoint-initdb.d:ro,Z" \
   "$IMAGE" \
-  -c "listen_addresses='*'" \
-  -c "log_statement='mod'" \
-  -c "log_connections='on'" \
-  -c "log_disconnections='on'" \
-  -c "password_encryption='scram-sha-256'"
+  -c "listen_addresses=*" \
+  -c "log_statement=mod" \
+  -c "log_connections=on" \
+  -c "log_disconnections=on" \
+  -c "password_encryption=scram-sha-256"
 
 echo "PostgreSQL container '$CONTAINER_NAME' is running."
