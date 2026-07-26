@@ -5,10 +5,17 @@ echo "Starting hardened PostgreSQL Podman deployment..."
 
 # Configuration Variables
 CONTAINER_NAME="postgres-alpine"
-IMAGE="postgres:18.4-alpine"
+# Pinned in lockstep with the pgAdmin client (run_pgadmin.sh; pgAdmin 9.x
+# supports PostgreSQL 18). Bump both together so client/server stay compatible.
+IMAGE="docker.io/library/postgres:18-alpine"
 PGDATA_VOL="pg_data_secure"
 INIT_DIR="$(pwd)/initdb.d"
 NETWORK_NAME="pg-isolated-net"
+# Publish to host loopback so host-side tools (pgAdmin, psql) can connect. Bound
+# to 127.0.0.1 ONLY — never on the wire. The container stays on the --internal
+# network (no outbound internet); a published port is a separate host->container
+# path and does not give the container egress.
+HOST_BIND="127.0.0.1:5432"
 
 # 1. Create initialization directory if it doesn't exist
 mkdir -p "$INIT_DIR"
@@ -32,10 +39,14 @@ fi
 
 # 5. Run the hardened container
 # NOTE: The Alpine Postgres image runs as the 'postgres' user internally.
+# NOTE: PG18's image moved PGDATA into a version-scoped subdir and ERRORS if the
+# volume is mounted at the legacy /var/lib/postgresql/data. Mount the PARENT
+# (/var/lib/postgresql) instead.
 podman run -d \
   --name "$CONTAINER_NAME" \
   --replace \
   --network "$NETWORK_NAME" \
+  -p "$HOST_BIND:5432" \
   --secret pg_super_pass \
   --read-only \
   --tmpfs /tmp:rw,noexec,nosuid \
@@ -49,7 +60,7 @@ podman run -d \
   -e POSTGRES_PASSWORD_FILE="/run/secrets/pg_super_pass" \
   -e POSTGRES_USER="db_admin" \
   -e POSTGRES_DB="app_database" \
-  -v "$PGDATA_VOL:/var/lib/postgresql/data:Z" \
+  -v "$PGDATA_VOL:/var/lib/postgresql:Z" \
   -v "$INIT_DIR:/docker-entrypoint-initdb.d:ro,Z" \
   "$IMAGE" \
   -c "listen_addresses='*'" \

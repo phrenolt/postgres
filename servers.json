@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "postgres-alpine (local)",
+      "Group": "Servers",
+      "Host": "127.0.0.1",
+      "Port": 5432,
+      "MaintenanceDB": "app_database",
+      "Username": "db_admin",
+      "SSLMode": "prefer",
+      "Comment": "The hardened Postgres from run_postgresql.sh, published on host loopback. Add other servers from the pgAdmin UI."
+    }
+  }
+}
